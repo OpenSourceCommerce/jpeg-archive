@@ -1,19 +1,51 @@
 language: c
+jobs:
+    include:
+        - os: linux
+        - os: osx
+          osx_image: xcode11
+before_deploy:
+    - export TRAVIS_TAG="v2.2.0.$TRAVIS_BUILD_NUMBER-binary"
+    - echo "$TRAVIS_TAG" "$TRAVIS_COMMIT"
+    - git config --local user.name "$USER_NAME"
+    - git config --local user.email "$USER_EMAIL"
+    - git tag "$TRAVIS_TAG" "$TRAVIS_COMMIT"
+
+deploy:
+    provider: releases
+    tag_name: $TRAVIS_TAG
+    target_commitish: $TRAVIS_COMMIT
+    name: $TRAVIS_TAG
+    overwrite: true
+    skip_cleanup: true
+    api_key: $github_token
+    file_glob: true
+    file:
+        - $TRAVIS_OS_NAME-jpeg-archive.zip
+    on:
+        branch: master
+        repo: nhatdo-nfq/jpeg-archive
 compiler:
-    - clang
+    #    - clang
     - gcc
 before_install:
-    - sudo apt-get update -qq
-    - sudo apt-get install -qq build-essential autoconf nasm
+    - if [ "$TRAVIS_OS_NAME" = "linux" ]; then sudo apt-get install -y cmake zlib1g-dev git libpng16-dev nasm zip ; fi
+    - if [ "$TRAVIS_OS_NAME" = "osx" ]; then brew install nasm zlib libpng libjpeg zip ; fi
     - git clone https://github.com/mozilla/mozjpeg.git
     - cd mozjpeg
-    - git fetch origin refs/tags/v3.2:refs/tags/v3.2
-    - git fetch --all
-    - git checkout tags/v3.2
-    - autoreconf -fiv
-    - ./configure --with-jpeg8
-    - make && sudo make install
+    - if [ "$TRAVIS_OS_NAME" = "linux" ]; then mkdir build && cd build && cmake -G"Unix Makefiles" -DPNG_SUPPORTED=TRUE ../ && make SHARED=0 CC='gcc -static' && make install ; fi
+    - if [ "$TRAVIS_OS_NAME" = "osx" ]; then mkdir build && cd build && cmake -G"Unix Makefiles" -DPNG_SUPPORTED=TRUE -DZLIB_LIBRARY=/usr/local/Cellar/zlib/1.2.11/lib/libz.a -DPNG_PNG_INCLUDE_DIR=/usr/local/Cellar/libpng/1.6.37/include -DPNG_LIBRARY=/usr/local/Cellar/libpng/1.6.37/lib/libpng.a ../ && make SHARED=0 CC='gcc -static' && sudo make install ; fi
     - sudo ln -s /opt/mozjpeg/lib64 /opt/mozjpeg/lib
-    - cd ..
+    - cd ../..
 script:
-    - make && make test && cd test && ./test.sh
+    - ls -la /opt/mozjpeg/lib
+    - if [ "$TRAVIS_OS_NAME" = "osx" ]; then ls -la /usr/local/Cellar/jpeg/ ; fi
+    - if [ "$TRAVIS_OS_NAME" = "linux" ]; then LDFLAGS="--static" make ; fi
+    - if [ "$TRAVIS_OS_NAME" = "osx" ]; then MOZJPEG_PREFIX="/opt/mozjpeg/" make ; fi
+    - sudo make install
+    - ./jpeg-recompress --version
+    - cd test
+    - ./test.sh
+    - cd ..
+    - ls -la /usr/local/bin/jpeg*
+    - zip -j $TRAVIS_OS_NAME-jpeg-archive.zip /usr/local/bin/jpeg-archive /usr/local/bin/jpeg-recompress /usr/local/bin/jpeg-compare /usr/local/bin/jpeg-hash
