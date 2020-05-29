@@ -24,7 +24,7 @@ deploy:
         - $TRAVIS_OS_NAME-jpeg-archive.zip
     on:
         branch: master
-        repo: nhatdo-nfq/jpeg-archive
+        repo: OpenSourceCommerce/jpeg-archive
 compiler:
     - clang
     - gcc
